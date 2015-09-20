@@ -1,0 +1,33 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Timeline</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,user-scalable=no,minimum-scale=1,maximum-scale=1" />
+    <script src="//code.jquery.com/jquery-1.11.3.min.js"></script>
+    <script src="../src/jTimeline.js"></script>
+    <script src="../src/jTimelineStylesheet.js"></script>
+    <style type="text/css">
+        html { overflow: auto; }
+        body { margin: 5px; }
+    </style>
+</head>
+<body>
+    <div id="i1" style="width: 100px;height:100px;background:red;position:absolute;left:20px;top:50px;"></div>
+    <script>
+        var player = jTimeline.line().to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.bounce.easeOut).play({
+            reverse: 1,
+            repeat: 0,
+            wait: 1
+        });
+
+        setTimeout(function () {
+            jTimeline.to($("#i1"), 2, { left: 500 });
+        }, 3000);
+
+        setTimeout(function () {
+            player.pause();
+        }, 4000);
+    </script>
+</body>
+</html>

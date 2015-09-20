@@ -84,7 +84,10 @@ var jTimeline = (function () {
 
 
 
-    var t = {};
+    var t = function () {
+        if (!this || this == window) return new t();
+        this._duration = 0;
+    };
     //动态
     var ease = {};
 
@@ -103,7 +106,7 @@ var jTimeline = (function () {
         };
     };
     //创建规则函数群
-    t.createLine = function (name, outFunction) {
+    t.createEase = function (name, outFunction) {
         var inFunction = createLineIn(outFunction);
         ease[name] = {
             easeOut: outFunction,
@@ -113,7 +116,7 @@ var jTimeline = (function () {
         };
     };
     //加速弹跳函数
-    t.createLine("bounce", function (v) {
+    t.createEase("bounce", function (v) {
         var zoom = 0.2;
         var t1 = 1;
         var t2 = Math.sqrt(zoom) * 2;
@@ -133,9 +136,9 @@ var jTimeline = (function () {
         }
     });
     //减速函数 
-    t.createLine("linear", function (v) { return Math.sin(Math.PI * v / 2); });
+    t.createEase("linear", function (v) { return Math.sin(Math.PI * v / 2); });
     //加速冲出回弹
-    t.createLine("back", function (v) {
+    t.createEase("back", function (v) {
         var out = 0.06, tout = 0.3;
         //g1 = 2;
         var t1 = 1;
@@ -208,11 +211,7 @@ var jTimeline = (function () {
     var obj_id = 0;
 
     //时间线
-    t.line = function () {
-        if (this == t) return new (t.line)();
-        this._duration = 0;
-    };
-    t.line.prototype.add = function (obj) {
+    t.prototype.add = function (obj) {
         if (!obj || !obj.target || !obj.duration) throw new Error("target or duration is undefined");
         if (!obj.from && !obj.to) throw new Error("from and to are undefined at all");
         if (t.isArray(obj.target)) {
@@ -245,7 +244,7 @@ var jTimeline = (function () {
     };
 
     //从到
-    t.line.prototype.fromTo = function (obj, duration, from, to, delay, ease_fun) {
+    t.prototype.fromTo = function (obj, duration, from, to, delay, ease_fun) {
         if (delay instanceof Function) {
             ease_fun = delay;
             delay = undefined;
@@ -261,15 +260,15 @@ var jTimeline = (function () {
         return this;
     };
     //从
-    t.line.prototype.from = function (obj, duration, from, delay, ease_fun) {
+    t.prototype.from = function (obj, duration, from, delay, ease_fun) {
         return this.fromTo(obj, duration, from, undefined, delay, ease_fun);
     };
     //到
-    t.line.prototype.to = function (obj, duration, to, delay, ease_fun) {
+    t.prototype.to = function (obj, duration, to, delay, ease_fun) {
         return this.fromTo(obj, duration, undefined, to, delay, ease_fun);
     };
     //添加回调函数
-    t.line.prototype.callback = function (callback, delay) {
+    t.prototype.callback = function (callback, delay) {
         if (!callback) return;
         if (!delay && delay != 0) delay = this._duration;
         else this._duration = Math.max(this._duration, delay);
@@ -418,7 +417,7 @@ var jTimeline = (function () {
         var dtime = now - this._last_time;
         this._last_time = now;
 
-        this._process += dtime / 1000;
+        this._process += dtime * this.config.scale / 1000;
         //根据时间来算位置
         var len = this.config.delay + this._duration;
         var all_len = len + this.config.wait;
@@ -534,23 +533,23 @@ var jTimeline = (function () {
     //最小小数
     var minValue = 0.00001;
     //播放，将产生一个播放对象，而不修改源对象
-    t.line.prototype.play = function (config) {
+    t.prototype.play = function (config) {
         var player = new Player(this, config);
         player.play();
         return player;
     };
 
     //原型
-    t.fn = t.line.prototype;
+    t.fn = t.prototype;
 
     t.fromTo = function (tar, duration, from, to, delay, ease_fun) {
-        return t.line().fromTo(tar, duration, from, to, delay, ease_fun).play();
+        return t().fromTo(tar, duration, from, to, delay, ease_fun).play();
     };
     t.from = function (tar, duration, from, delay, ease_fun) {
-        return t.line().from(tar, duration, from, delay, ease_fun).play();
+        return t().from(tar, duration, from, delay, ease_fun).play();
     };
     t.to = function (tar, duration, to, delay, ease_fun) {
-        return t.line().to(tar, duration, to, delay, ease_fun).play();
+        return t().to(tar, duration, to, delay, ease_fun).play();
     };
 
     return t;

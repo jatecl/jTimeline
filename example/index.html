@@ -15,10 +15,11 @@
 <body>
     <div id="i1" style="width: 100px;height:100px;background:red;position:absolute;left:20px;top:50px;"></div>
     <script>
-        var player = jTimeline.line().to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.bounce.easeOut).play({
+        var player = jTimeline().to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.bounce.easeOut).play({
             reverse: 1,
             repeat: 0,
-            wait: 1
+            wait: 1,
+            scale: 0.5
         });
 
         setTimeout(function () {

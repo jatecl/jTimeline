@@ -1,15 +1,14 @@
 ﻿//这是一个非常简单的实现，没有分解transform，就当作一个demo吧
 (function () {
     var old_access = jTimeline._access;
-    var units = {
-        left: "px",
-        top: "px",
-        right: "px",
-        bottom: "px",
-        width: "px",
-        height: "px",
-        fontSize: "px"
+    var units_mini = {
+        px: "left,top,right,bottom,width,height,fontSize"
     };
+    var units = {};
+    for (var k in units_mini) {
+        var ps = units_mini[k].split(",");
+        for (var i = 0; i < ps.length; ++i) units[ps[i]] = k;
+    }
     jTimeline._access = function (obj, key) {
         if (obj && !(key in obj)) return function (val) {
             if (arguments.length) {

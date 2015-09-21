@@ -48,6 +48,8 @@ play: 播放已编辑的时间线，并返回Player对象
 
 	config.repeat: 播放次数。默认为1，小于等于0时，会无限循环播放
 
+	config.keepBeforeDelay: 在播放到指定的属性之前，保持当前状态。默认为false
+
 
 
 ## Player

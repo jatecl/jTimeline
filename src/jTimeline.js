@@ -85,7 +85,7 @@ var jTimeline = (function () {
 
 
     var t = function () {
-        if (!this || this == window) return new t();
+        if (!this || !(this instanceof t)) return new t();
         this._duration = 0;
     };
     //动态
@@ -285,30 +285,38 @@ var jTimeline = (function () {
         this.key = key;
         this.valueSet = t._access(obj, key);
         this.player = player;
-
+        this._cache = 0;
         //删除索引
         var line = obj._jtimeline.line[key];
-        if (line) delete line._targets[obj._jtimeline.index].setter[key];
+        if (line) delete line._targets[obj._jtimeline.id].setter[key];
         obj._jtimeline.line[key] = player;
+    };
+    PropertyLine.prototype.push = function(i){
+        if (this.list.length && this.list[this.list.length - 1].delay == i.delay) this.list.pop();
+        if (!this.list.length && i.delay > 0 && this.player.config.keepBeforeDelay) this._beforeDelay = this.valueSet();
+        this.list.push(i);
     };
     PropertyLine.prototype.clear = function () {
         var line = this.target._jtimeline.line[this.key];
         if (line[this.key] == this.player) delete line[this.key];
         this.player = null;
     };
-    PropertyLine.prototype.reset = function () {
-        this._index = 0;
-    };
     PropertyLine.prototype.valueAt = function (time) {
-        for (; this._index < this.list.length; ++this._index) {
-            var oi = this.list[this._index];
-            if (oi.delay <= time && oi.duration + oi.delay >= time) {
+        while(true) {
+            var ended = this._cache >= this.list.length - 1;
+            var oi = this.list[this._cache];
+            if (oi.delay <= time && oi.duration + oi.delay >= time && (ended || this.list[this._cache + 1].delay > time)) {
                 var i = (time - oi.delay) / oi.duration;
                 return _excuter(oi.from, oi.to, oi.ease, i);
+            } else if (time < oi.delay) {
+                if (this._cache == 0) return this.player.config.keepBeforeDelay ? this._beforeDelay : oi.from;
+                if (ended) this._cache = 0;
+                else --this._cache;
+            } else {
+                if (ended) return oi.to;
+                ++this._cache;
             }
         }
-        if (!this.list.length) return 0;
-        return this.list[this.list.length - 1].to;
     };
 
 
@@ -324,7 +332,8 @@ var jTimeline = (function () {
             delay: 0, //延迟播放，受scale影响
             scale: 1, //时间缩放
             wait: 0, //每次播放结束后的等待时间
-            reverse: 0 //反向播放
+            reverse: 0, //反向播放
+            keepBeforeDelay: t.keepBeforeDelay //在播放到指定的属性之前，保持当前状态
         }, conf);
 
         this._duration = timeline._duration;
@@ -345,6 +354,7 @@ var jTimeline = (function () {
         for (var i in ol) {
             var oi = ol[i];
             var idx = oi.target._jtimeline;
+            console.log(idx);
             var lst = oi.list.slice();
 
             var minSort = minValue / lst.length;
@@ -358,7 +368,7 @@ var jTimeline = (function () {
                 var lj = lst[j];
                 if (lj.from) for (var k in lj.from) {
                     if (!setter[k]) setter[k] = new PropertyLine(oi.target, k, this);
-                    setter[k].list.push({
+                    setter[k].push({
                         delay: lj.delay,
                         duration: lj.duration,
                         ease: lj.ease,
@@ -369,7 +379,7 @@ var jTimeline = (function () {
                 if (lj.to) for (var k in lj.to) {
                     if (lj.from && (k in lj.from)) continue;
                     if (!setter[k]) setter[k] = new PropertyLine(oi.target, k, this);
-                    setter[k].list.push({
+                    setter[k].push({
                         delay: lj.delay,
                         duration: lj.duration,
                         ease: lj.ease,
@@ -379,7 +389,7 @@ var jTimeline = (function () {
                 }
             }
 
-            this._targets[idx.index] = {
+            this._targets[idx.id] = {
                 target: oi.target,
                 setter: setter
             };
@@ -412,7 +422,7 @@ var jTimeline = (function () {
         this._killed = true;
         this.trigger("kill");
     };
-    Player.prototype.onTick = function () {
+    var _onTick = function () {
         var now = new Date().getTime();
         var dtime = now - this._last_time;
         this._last_time = now;
@@ -426,18 +436,17 @@ var jTimeline = (function () {
         //最大重复次数
         if (this.config.repeat > 0 && times >= this.config.repeat) {
             this.kill();
-            this._setProcess(this._duration);
+            _setProcess.call(this, this._duration);
             return;
         }
         
         //初始化
         if (times != this._last_repeat) {
-            this.resetArgin();
             this._last_repeat = times;
         }
-        this._setProcess();
+        _setProcess.call(this);
     };
-    Player.prototype._setProcess = function (t) {
+    var _setProcess = function (t) {
         if (arguments.length == 0) {
             //根据时间来算位置
             var len = this.config.delay + this._duration;
@@ -461,19 +470,13 @@ var jTimeline = (function () {
         }
         this.trigger("process");
     };
-    Player.prototype.resetArgin = function () {
-        for (var i in this._targets) {
-            var ti = this._targets[i].setter;
-            for (var j in ti) ti[j].reset();
-        }
-    };
     Player.prototype.reset = function () {
         if (!this._status) return;
         t._removePlayer(this);
         this._status = 0;
         this._process = 0;
         this._last_repeat = -1;
-        this._setProcess(0);
+        _setProcess.call(this, 0);
         this.trigger("reset");
     };
     Player.prototype.process = function (v) {
@@ -487,7 +490,7 @@ var jTimeline = (function () {
         if (!this._last_repeat || this._last_repeat < 0) this._last_repeat = 0;
         this._process = this._last_repeat * all_len + Math.max(0, Math.min(1, v)) * all_len;
 
-        this._setProcess();
+        _setProcess.call(this);
     };
 
 
@@ -506,7 +509,7 @@ var jTimeline = (function () {
         var timer, that = this;
         var ticker = function () {
             if (!_killTimer) return;
-            for (var i in player_list) player_list[i].onTick();
+            for (var i in player_list) _onTick.call(player_list[i]);
             if (aframe) timer = aframe(ticker);
         };
         if (!aframe) timer = setInterval(ticker, 16);

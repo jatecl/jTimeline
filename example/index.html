@@ -15,20 +15,24 @@
 <body>
     <div id="i1" style="width: 100px;height:100px;background:red;position:absolute;left:20px;top:50px;"></div>
     <script>
-        var player = jTimeline().to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.bounce.easeOut).play({
-            reverse: 1,
+        var player = jTimeline()
+            .to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.bounce.easeOut)
+            .fromTo($("#i1"), 2, { width: 300 }, { width: 100 }, 1)
+            .to($("#i1"), 2, { width: 300, height: 400 })
+            .play({
+            //reverse: 1,
             repeat: 0,
             wait: 1,
             scale: 0.5
         });
 
         setTimeout(function () {
-            jTimeline.to($("#i1"), 2, { left: 500 });
+            //jTimeline.to($("#i1"), 2, { left: 500 });
         }, 3000);
 
         setTimeout(function () {
-            player.pause();
-        }, 4000);
+            //player.pause();
+        }, 12000);
     </script>
 </body>
 </html>

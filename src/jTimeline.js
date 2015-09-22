@@ -87,6 +87,7 @@ var jTimeline = (function () {
     var t = function () {
         if (!this || !(this instanceof t)) return new t();
         this._duration = 0;
+        this._list = {};
     };
     //动态
     var ease = {};
@@ -215,6 +216,7 @@ var jTimeline = (function () {
     };
     //默认动效
     t.defaultEase = ease.linear.easeOut;
+
     //动效列表
     t.ease = ease;
     //数组判断， 如果要支持jQuery对象，请重写这个方法
@@ -237,7 +239,7 @@ var jTimeline = (function () {
             }
             return this;
         }
-        if (!this._pre_complite) this._pre_complite = {};
+
         if (!obj.target._jtimeline) obj.target._jtimeline = {
             id: ++obj_id,
             line: {}
@@ -248,14 +250,14 @@ var jTimeline = (function () {
         this._duration = Math.max(this._duration, obj.duration + obj.delay);
 
         var index = obj.target._jtimeline;
-        var pre = this._pre_complite;
 
-        if (!pre[index.id]) pre[index.id] = {
+        if (!this._list[index.id]) this._list[index.id] = {
             target: obj.target,
             list: []
         };
-        obj._jtimeline = pre[index.id].list.length;
-        pre[index.id].list.push(obj);
+        obj._jtimeline = this._list[index.id].list.length;
+        this._list[index.id].list.push(obj);
+        return this;
     };
 
     //从到
@@ -264,7 +266,7 @@ var jTimeline = (function () {
             ease_fun = delay;
             delay = undefined;
         }
-        this.add({
+        return this.add({
             target: obj,
             duration: duration,
             from: from,
@@ -272,7 +274,6 @@ var jTimeline = (function () {
             delay: delay,
             ease: ease_fun
         });
-        return this;
     };
     //从
     t.prototype.from = function (obj, duration, from, delay, ease_fun) {
@@ -292,7 +293,29 @@ var jTimeline = (function () {
             callback: callback,
             delay: delay
         });
+        return this;
     };
+    //添加其他的时间线，只会拷贝当前状态，当已添加的时间线被修改时，不会影响到当前时间线
+    t.prototype.addTimeline = function (line, delay, scale, reverse) {
+        delay = delay || 0;
+        scale = scale || 1;
+        for (var i in line._list) {
+            var list = line._list[i].list;
+            for (var j = 0; j < list.length; ++j) {
+                var oi = list[j];
+                this.add({
+                    target: oi.target,
+                    duration: oi.duration * scale,
+                    from: reverse ? oi.to : oi.from,
+                    to: reverse ? oi.from : oi.to,
+                    delay: (reverse ? line._duration - oi.delay - oi.duration : oi.delay) * scale + delay,
+                    ease: reverse ? createLineIn(oi.ease) : oi.ease
+                });
+            }
+        }
+        return this;
+    };
+
 
     var PropertyLine = function (obj, key, player) {
         this.list = [];
@@ -368,11 +391,10 @@ var jTimeline = (function () {
         }
 
         //fromTo
-        var ol = timeline._pre_complite;
+        var ol = timeline._list;
         for (var i in ol) {
             var oi = ol[i];
             var idx = oi.target._jtimeline;
-            console.log(idx);
             var lst = oi.list.slice();
 
             var minSort = minValue / lst.length;
@@ -515,13 +537,22 @@ var jTimeline = (function () {
         _setProcess.call(this);
     };
 
-
-    //定时器实现
+    var requireTimeout = function (callback) { return setTimeout(callback, 16); };
+    //定时器实现。支持所有实现了setTimeout的平台
     t.requestAnimationFrame = function () {
-        return cls.or(window, 'r,webkitR,msR,mozR'.split(','), 'equestAnimationFrame') || function (callback) { return setTimeout(callback, 16); };
+        try {
+            return cls.or(window, 'r,webkitR,msR,mozR'.split(','), 'equestAnimationFrame') || requireTimeout;
+        } catch (e) {
+            return requireTimeout;
+        }
     };
+    //清除定时器
     t.clearAnimationFrame = function () {
-        return cls.or(window, 'c,webkitC,msC,mozC'.split(','), 'ancelAnimationFrame') || clearTimeout;
+        try {
+            return cls.or(window, 'c,webkitC,msC,mozC'.split(','), 'ancelAnimationFrame') || clearTimeout;
+        } catch (e) {
+            return clearTimeout;
+        }
     };
 
     var _killTimer;

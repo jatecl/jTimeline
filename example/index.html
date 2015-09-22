@@ -17,8 +17,8 @@
     <script>
         var player = jTimeline()
             .to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.quad.easeOut)
-            .fromTo($("#i1"), 2, { width: 300 }, { width: 100 }, 1)
             .to($("#i1"), 2, { width: 300, height: 400 })
+            .addTimeline(jTimeline().fromTo($("#i1"), 2, { width: 300 }, { width: 100 }), 1, 2)
             .play({
                 reverse: 3,
                 repeat: 0,

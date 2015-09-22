@@ -16,15 +16,22 @@
     <div id="i1" style="width: 100px;height:100px;background:red;position:absolute;left:20px;top:50px;"></div>
     <script>
         var player = jTimeline()
-            .to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.quad.easeOut)
+            .to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.bounce.easeOut)
+            .addTimeline(jTimeline().fromTo($("#i1"), 2, { width: 200 }, { width: 100 }), 1, 0.5, 1)
             .to($("#i1"), 2, { width: 300, height: 400 })
-            .addTimeline(jTimeline().fromTo($("#i1"), 2, { width: 300 }, { width: 100 }), 1, 2)
+            .callback(function () {
+                console.log("end");
+            }, 2)
             .play({
                 reverse: 3,
                 repeat: 0,
                 wait: 1,
-                //scale: 0.5
+                scale: 2
             });
+
+        player.on("times", function (t) {
+            console.log(t);
+        });
 
         setTimeout(function () {
             //jTimeline.to($("#i1"), 2, { left: 500 });

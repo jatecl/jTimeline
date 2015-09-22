@@ -297,7 +297,7 @@ var jTimeline = (function () {
     };
     //添加其他的时间线，只会拷贝当前状态，当已添加的时间线被修改时，不会影响到当前时间线
     t.prototype.addTimeline = function (line, delay, scale, reverse) {
-        delay = delay || 0;
+        if (!delay && delay != 0) delay = this._duration;
         scale = scale || 1;
         for (var i in line._list) {
             var list = line._list[i].list;
@@ -315,6 +315,10 @@ var jTimeline = (function () {
         }
         return this;
     };
+    //时间线长度
+    t.prototype.duration = function () {
+        return this._duration;
+    };
 
 
     var PropertyLine = function (obj, key, player) {
@@ -329,7 +333,7 @@ var jTimeline = (function () {
         if (line) delete line._targets[obj._jtimeline.id].setter[key];
         obj._jtimeline.line[key] = player;
     };
-    PropertyLine.prototype.push = function(i){
+    PropertyLine.prototype.push = function (i) {
         if (this.list.length && this.list[this.list.length - 1].delay == i.delay) this.list.pop();
         if (!this.list.length && i.delay > 0 && this.player.config.keepBeforeDelay) this._beforeDelay = this.valueSet();
         this.list.push(i);
@@ -340,7 +344,7 @@ var jTimeline = (function () {
         this.player = null;
     };
     PropertyLine.prototype.valueAt = function (time) {
-        while(true) {
+        while (true) {
             var ended = this._cache >= this.list.length - 1;
             var oi = this.list[this._cache];
             if (oi.delay <= time && oi.duration + oi.delay >= time && (ended || this.list[this._cache + 1].delay > time)) {
@@ -379,7 +383,7 @@ var jTimeline = (function () {
 
         this._duration = timeline._duration;
         this._player_id = ++player_id;
-        
+
         this._targets = {};
         //callbacks
         var calls = timeline._callbacks;
@@ -389,6 +393,7 @@ var jTimeline = (function () {
                 return a.delay - b.delay;
             });
         }
+        this._callbacks = calls;
 
         //fromTo
         var ol = timeline._list;
@@ -435,6 +440,9 @@ var jTimeline = (function () {
             };
         }
         this._process = 0;
+        this._last_repeat = 0;
+
+        if (this._callbacks && this._callbacks.length) this._position = _getProcess.call(this);
     };
     cls.createEventSupport(Player.prototype);
     Player.prototype.play = function () {
@@ -472,56 +480,90 @@ var jTimeline = (function () {
         var all_len = this.config.delay + this._duration + this.config.wait;
 
         var times = Math.floor(this._process / all_len);
+
         //最大重复次数
         if (this.config.repeat > 0 && times >= this.config.repeat) {
+            _setProcess.call(this, _getStaticProcess.call(this, this._duration));
             this.kill();
-            _setProcess.call(this, this._duration);
             return;
         }
-        
+
         //初始化
-        if (times != this._last_repeat) {
+        var times_changed = times != this._last_repeat;
+        if (times_changed) {
             this._last_repeat = times;
+            this.trigger("times", times);
         }
-        _setProcess.call(this);
+        _setProcess.call(this, _getProcess.call(this), times_changed);
     };
-    var _setProcess = function (t) {
+    var _isReverse = function () {
         var reverse = this.config.reverse;
         if (reverse > 1) {
             var all_len = this.config.delay + this._duration + this.config.wait;
             var times = Math.floor(this._process / all_len);
+            if (this.config.repeat > 0 && times >= this.config.repeat) times = this.config.repeat - 1;
             reverse = (times - reverse) % 2;
         }
-
-        if (arguments.length == 0) {
-            //根据时间来算位置
-            var all_len = this.config.delay + this._duration + this.config.wait;
-            var this_time = this._process % all_len;
-            if (this_time == 0 && this._process / all_len > this._last_repeat) {
-                if (reverse) t = 0;
-                else t = this._duration;
-            } else if (reverse) {
-                t = Math.max(0, Math.min(this._duration, all_len - this_time - this.config.delay));
-            } else {
-                t = Math.max(0, Math.min(this._duration, this_time - this.config.delay));
-            }
-        } else if (reverse) {
-            t = this._duration - t;
+        return reverse;
+    };
+    var _getProcess = function () {
+        //根据时间来算位置
+        var all_len = this.config.delay + this._duration + this.config.wait;
+        var this_time = this._process % all_len;
+        if (this_time == 0 && this._process / all_len > this._last_repeat) {
+            if (_isReverse.call(this)) return 0;
+            else return this._duration;
+        } else if (_isReverse.call(this)) {
+            return Math.max(0, Math.min(this._duration, all_len - this_time - this.config.delay));
         }
-
+        return Math.max(0, Math.min(this._duration, this_time - this.config.delay));
+    };
+    var _getStaticProcess = function (time) {
+        if (_isReverse.call(this)) return this._duration - time;
+        return time;
+    };
+    var _setProcess = function (time, times_changed, ignore_callbacks) {
         for (var i in this._targets) {
             var ti = this._targets[i].setter;
-            for (var j in ti) ti[j].valueSet(ti[j].valueAt(t));
+            for (var j in ti) ti[j].valueSet(ti[j].valueAt(time));
+        }
+
+        if (this._callbacks && this._callbacks.length) {
+            if (!ignore_callbacks) {
+                if (times_changed) { //越过了边界
+                    var limit1 = this._duration, limit2 = 0;
+                    if (this.config.reverse == 1) {
+                        limit1 = 0;
+                        limit2 = this._duration;
+                    } else if (this.config.reverse > 1) {
+                        limit1 = limit2 = _isReverse.call(this) ? this._duration : 0;
+                    }
+                    _setCallbackProcess.call(this, this._position, limit1);
+                    _setCallbackProcess.call(this, limit2, time);
+                } else {
+                    _setCallbackProcess.call(this, this._position, time);
+                }
+            }
+            this._position = time;
         }
         this.trigger("process");
+    };
+    var _setCallbackProcess = function (pre, time) {
+        var a = Math.min(pre, time);
+        var b = Math.max(pre, time);
+
+        for (var i = 0; i < this._callbacks.length; ++i) {
+            var ci = this._callbacks[i];
+            if ((ci.delay > a && ci.delay <= b) || (ci.delay == 0 && a == 0)) ci.callback && ci.callback.call(this, time);
+        }
     };
     Player.prototype.reset = function () {
         if (!this._status) return;
         _removePlayer(this);
         this._status = 0;
         this._process = 0;
-        this._last_repeat = -1;
-        _setProcess.call(this, 0);
+        this._last_repeat = 0;
+        _setProcess.call(this, _getStaticProcess.call(this, 0), false, true); //reset时不需要调用回调函数
         this.trigger("reset");
     };
     Player.prototype.process = function (v) {
@@ -531,10 +573,9 @@ var jTimeline = (function () {
             if (val == 0 && this._process / all_len > this._last_repeat) return 1;
             return val;
         }
-        if (!this._last_repeat || this._last_repeat < 0) this._last_repeat = 0;
         this._process = this._last_repeat * all_len + Math.max(0, Math.min(1, v)) * all_len;
 
-        _setProcess.call(this);
+        _setProcess.call(this, _getProcess.call(this));
     };
 
     var requireTimeout = function (callback) { return setTimeout(callback, 16); };

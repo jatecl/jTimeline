@@ -41,6 +41,11 @@ addTimeline: 添加另一条时间线的只读拷贝。
 * 注意：在添加的时间线未指定开始状态时（比如只用了一个from函数或者to函数），可能会产生一些意料外的情况，因为会被当前时间线的状态影响。
 
 
+
+duration: 时间线长度
+
+
+
 callback: 在时间线里面插入函数调用。
 	
 	callback: 回调函数
@@ -80,7 +85,21 @@ reset: 重置播放状态。
 
 kill: 结束播放。kill被调用后，将不能再次调用play方法。对象将处于无效状态
 
-process: 播放进度，范围为0到1。传入参数将设置播放进度
+process: 正向的播放进度，范围为0到1。传入参数将设置播放进度。
+
+Player有如下事件可以使用
+	
+	play: 调用play方法时触发
+
+	pause: 调用pause方法时触发
+
+	reset: 调用reset方法时触发
+
+	kill: 播放器被kill时触发
+
+	process: 播放进度变化时触发
+
+	times: 进入下一个循环时触发。会给回调传入当前循环数
 
 
 ```javascript
@@ -91,6 +110,9 @@ var player = jTimeline().from($div, 0.5, { left: 30 })
 		alert("end");
 	})
 	.play();
+player.on("times", function(t){
+	console.log(t);
+});
 player.process(0.5);
 ```
 

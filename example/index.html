@@ -17,11 +17,11 @@
     <script>
         var player = jTimeline()
             .to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.bounce.easeOut)
-            .addTimeline(jTimeline().fromTo($("#i1"), 2, { width: 200 }, { width: 100 }), 1, 0.5, 1)
+            .addTimeline(jTimeline().fromTo($("#i1"), 2, { width: 200 }, { width: 100 }).callback(function () { console.log("test"); }), 1, 0.5, 1)
             .to($("#i1"), 2, { width: 300, height: 400 })
             .callback(function () {
                 console.log("end");
-            }, 2)
+            })
             .play({
                 reverse: 3,
                 repeat: 0,

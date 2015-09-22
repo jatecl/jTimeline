@@ -313,6 +313,10 @@ var jTimeline = (function () {
                 });
             }
         }
+        if (line._callbacks) for (var i = 0; i < line._callbacks.length; ++i) {
+            var oi = line._callbacks[i];
+            this.callback(oi.callback, (reverse ? line._duration - oi.delay - oi.duration : oi.delay) * scale + delay);
+        }
         return this;
     };
     //时间线长度

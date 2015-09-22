@@ -44,7 +44,7 @@ play: 播放已编辑的时间线，并返回Player对象
 
 	config.scale: 播放速度比例。默认为1
 
-	config.reverse: 播放方向。默认为0
+	config.reverse: 播放方向。默认为0，正向播放。其他值: 1、反向播放；2、正向反向交替，从正向开始；3、正向反向交替，从反向开始。当reverse大于1时，repeat设置为2或以上才会生效
 
 	config.repeat: 播放次数。默认为1，小于等于0时，会无限循环播放
 
@@ -79,10 +79,20 @@ player.process(0.5);
 
 ## 其他方法和属性
 
-jTimeline.from：将调用jTimeline().from并play
+jTimeline.from: 将调用jTimeline().from并play
 
-jTimeline.to：将调用jTimeline().to并play
+jTimeline.to: 将调用jTimeline().to并play
 
-jTimeline.fromTo：将调用jTimeline().fromTo并play
+jTimeline.fromTo: 将调用jTimeline().fromTo并play
 
-jTimeline.ease：预置的缓动效果
+jTimeline.ease: 预置的缓动效果
+
+jTimeline.defaultEase: 默认缓动效果。重写可改变全局行为
+
+jTimeline.requestAnimationFrame: 多媒体定时器。重写这个函数，可以让jTimeline运行在cocos2x-js等其他非浏览器平台上
+
+jTimeline.clearAnimationFrame: 清除多媒体定时器。应该和requestAnimationFrame同时被重写
+
+jTimeline.access: 重写这个函数，可以支持更多的对象。示例见src/jTimelineStylesheet.js
+
+jTimeline.isArray: 重写这个函数，可以对自定义的列表对象做处理。示例见src/jTimelineStylesheet.js

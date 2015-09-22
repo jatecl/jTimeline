@@ -162,6 +162,21 @@ var jTimeline = (function () {
             return 1 + Math.pow((v - 1) / t2, 2) * out;
         }
     });
+    //平方函数
+    t.createEase("square", function (v) {
+        var ev = 1 - v;
+        return 1 - ev * ev;
+    });
+    //立方函数
+    t.createEase("cube", function (v) {
+        var ev = 1 - v;
+        return 1 - ev * ev * ev;
+    });
+    //4次方函数
+    t.createEase("quad", function (v) {
+        var ev = 1 - v;
+        return 1 - ev * ev * ev * ev;
+    });
     //匀速函数
     ease.linear.easeNone = function (v) { return v; };
 
@@ -189,7 +204,7 @@ var jTimeline = (function () {
     };
 
     //获得读写器，可重写这个方法来改变行为
-    t._access = function (obj, key) {
+    t.access = function (obj, key) {
         if (obj && (key in obj)) {
             if (typeof obj[key] === "function") {
                 if (key.substr(0, 3) == "get") return setter_set(obj, key);
@@ -283,7 +298,7 @@ var jTimeline = (function () {
         this.list = [];
         this.target = obj;
         this.key = key;
-        this.valueSet = t._access(obj, key);
+        this.valueSet = t.access(obj, key);
         this.player = player;
         this._cache = 0;
         //删除索引
@@ -310,8 +325,7 @@ var jTimeline = (function () {
                 return _excuter(oi.from, oi.to, oi.ease, i);
             } else if (time < oi.delay) {
                 if (this._cache == 0) return this.player.config.keepBeforeDelay ? this._beforeDelay : oi.from;
-                if (ended) this._cache = 0;
-                else --this._cache;
+                --this._cache;
             } else {
                 if (ended) return oi.to;
                 ++this._cache;
@@ -324,6 +338,10 @@ var jTimeline = (function () {
     var _excuter = function (from, to, ease_fun, i) {
         return from + (to - from) * ease_fun(i);
     };
+
+
+    //时间尺度的最小小数。单位为秒
+    var minValue = 0.0001;
 
     var player_id = 0;
     var Player = function (timeline, conf) {
@@ -402,18 +420,18 @@ var jTimeline = (function () {
         if (1 == this._status) return;
         this._status = 1;
         this._last_time = new Date().getTime();
-        t._addPlayer(this);
+        _addPlayer(this);
         this.trigger("play");
     };
     Player.prototype.pause = function () {
         if (2 == this._status) return;
-        t._removePlayer(this);
+        _removePlayer(this);
         this._status = 2;
         this.trigger("pause");
     };
     Player.prototype.kill = function () {
         if (-1 == this._status) return;
-        t._removePlayer(this);
+        _removePlayer(this);
         this._status = -1;
         for (var i in this._targets) {
             var ti = this._targets[i].setter;
@@ -429,8 +447,7 @@ var jTimeline = (function () {
 
         this._process += dtime * this.config.scale / 1000;
         //根据时间来算位置
-        var len = this.config.delay + this._duration;
-        var all_len = len + this.config.wait;
+        var all_len = this.config.delay + this._duration + this.config.wait;
 
         var times = Math.floor(this._process / all_len);
         //最大重复次数
@@ -447,20 +464,26 @@ var jTimeline = (function () {
         _setProcess.call(this);
     };
     var _setProcess = function (t) {
+        var reverse = this.config.reverse;
+        if (reverse > 1) {
+            var all_len = this.config.delay + this._duration + this.config.wait;
+            var times = Math.floor(this._process / all_len);
+            reverse = (times - reverse) % 2;
+        }
+
         if (arguments.length == 0) {
             //根据时间来算位置
-            var len = this.config.delay + this._duration;
-            var all_len = len + this.config.wait;
+            var all_len = this.config.delay + this._duration + this.config.wait;
             var this_time = this._process % all_len;
             if (this_time == 0 && this._process / all_len > this._last_repeat) {
-                if (this.config.reverse) t = 0;
+                if (reverse) t = 0;
                 else t = this._duration;
-            } else if (this.config.reverse) {
+            } else if (reverse) {
                 t = Math.max(0, Math.min(this._duration, all_len - this_time - this.config.delay));
             } else {
                 t = Math.max(0, Math.min(this._duration, this_time - this.config.delay));
             }
-        } else if (this.config.reverse) {
+        } else if (reverse) {
             t = this._duration - t;
         }
 
@@ -472,7 +495,7 @@ var jTimeline = (function () {
     };
     Player.prototype.reset = function () {
         if (!this._status) return;
-        t._removePlayer(this);
+        _removePlayer(this);
         this._status = 0;
         this._process = 0;
         this._last_repeat = -1;
@@ -480,8 +503,7 @@ var jTimeline = (function () {
         this.trigger("reset");
     };
     Player.prototype.process = function (v) {
-        var len = this.config.delay + this._duration;
-        var all_len = len + this.config.wait;
+        var all_len = this.config.delay + this._duration + this.config.wait;
         if (!arguments.length) {
             var val = (this._process % all_len) / all_len;
             if (val == 0 && this._process / all_len > this._last_repeat) return 1;
@@ -495,46 +517,43 @@ var jTimeline = (function () {
 
 
     //定时器实现
+    t.requestAnimationFrame = function () {
+        return cls.or(window, 'r,webkitR,msR,mozR'.split(','), 'equestAnimationFrame') || function (callback) { return setTimeout(callback, 16); };
+    };
+    t.clearAnimationFrame = function () {
+        return cls.or(window, 'c,webkitC,msC,mozC'.split(','), 'ancelAnimationFrame') || clearTimeout;
+    };
 
-    var aframe = cls.or(window, 'r,webkitR,msR,mozR'.split(','), 'equestAnimationFrame');
-    var cframe = cls.or(window, 'c,webkitC,msC,mozC'.split(','), 'ancelAnimationFrame') || clearInterval;
-    //aframe = null;
-    //cframe = clearInterval;
     var _killTimer;
     var _startTimer = function () {
         if (_killTimer) return;
+        var aframe = t.requestAnimationFrame();
+        var cframe = t.clearAnimationFrame();
 
-        //*
-        //使用多媒体定时器
-        var timer, that = this;
         var ticker = function () {
             if (!_killTimer) return;
             for (var i in player_list) _onTick.call(player_list[i]);
-            if (aframe) timer = aframe(ticker);
+            timer = aframe(ticker);
         };
-        if (!aframe) timer = setInterval(ticker, 16);
         _killTimer = function () {
             if (timer) cframe(timer);
             _killTimer = undefined;
         };
-        ticker();
+        var timer = aframe(ticker); //启动定时器
     };
 
     var player_list = {};
-    t._addPlayer = function (player) {
+    var _addPlayer = function (player) {
         player_list[player._player_id] = player;
         _startTimer();
     };
 
-    t._removePlayer = function (player) {
+    var _removePlayer = function (player) {
         delete player_list[player._player_id];
         for (var i in player_list) return;
         _killTimer && _killTimer();
     };
 
-
-    //最小小数
-    var minValue = 0.00001;
     //播放，将产生一个播放对象，而不修改源对象
     t.prototype.play = function (config) {
         var player = new Player(this, config);
@@ -542,9 +561,7 @@ var jTimeline = (function () {
         return player;
     };
 
-    //原型
-    t.fn = t.prototype;
-
+    //使用的快捷方式
     t.fromTo = function (tar, duration, from, to, delay, ease_fun) {
         return t().fromTo(tar, duration, from, to, delay, ease_fun).play();
     };

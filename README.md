@@ -132,6 +132,8 @@ jTimeline.requestAnimationFrame: 多媒体定时器。重写这个函数，可�
 
 jTimeline.clearAnimationFrame: 清除多媒体定时器。应该和requestAnimationFrame同时被重写
 
-jTimeline.access: 重写这个函数，可以支持更多的对象。示例见src/jTimelineStylesheet.js
+jTimeline.access: 重写这个函数，可以支持更多的对象。示例见src/jTimelineCss.js
 
-jTimeline.isArray: 重写这个函数，可以对自定义的列表对象做处理。示例见src/jTimelineStylesheet.js
+jTimeline.isArray: 重写这个函数，可以对自定义的列表对象做处理。示例见src/jTimelineCss.js
+
+jTimeline.playSpace: 对动画进行分组，可以实现暂停、播放等动作

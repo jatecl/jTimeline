@@ -1,401 +1,118 @@
-﻿//特别说明，这个动画库在动画运行过程中会添加附加属性_jtimeline
-var jTimeline = (function () {
-    /**
-     * @method 注册事件
-     * @param event_name 时间名称
-     * @param callback 事件回调
-     */
-    var on = function (event_name, callback) {
-        if (!this._events) this._events = {};
-        if (!this._events[event_name]) this._events[event_name] = [];
-        this._events[event_name].push(callback);
-        return this;
-    };
-    /**
-     * @method 注销事件
-     * @param event_name 事件名称
-     * @param callback 要注销的回调。如果为空则注销该事件的所有回调。
-     */
-    var off = function (event_name, callback) {
-        if (!this._events) return this;
-        var el = this._events[event_name];
-        if (!el) return this;
-        if (!callback || (el.length == 1 && el[0] == callback)) {
-            this._events[event_name] = [];
-            delete this._events[event_name];
-        }
-        else {
-            for (var i = 0; i < el.length; ++i) {
-                if (el[i] == callback) {
-                    el.splice(i, 1);
-                    break;
-                }
-            }
-        }
-        return this;
-    };
-    /**
-     * @method 触发事件
-     * @param event_name 触发的事件名称
-     */
-    var trigger = function (event_name) {
-        if (!this._events) return this;
-        var el = this._events[event_name];
-        if (!el || !el.length) return this;
-        var args = [];
-        for (var i = 1; i < arguments.length; ++i) {
-            args.push(arguments[i]);
-        }
-        for (var i = 0; i < el.length; ++i) {
-            el[i].apply(this, args);
-        }
-        return this;
-    };
+﻿import EventEmitter from "events";
 
-    var appendEvent = function(o) {
-        if (!o) return;
-        o.on = on;
-        o.off = off;
-        o.trigger = trigger;
-        return o;
+//拼合两个函数
+function createLineInOut(inf, out) {
+    return function (v) {
+        if (v < 0.5) return inf(v * 2) / 2;
+        return out((v - 0.5) * 2) / 2 + 0.5;
     };
+}
+//反向函数
+function createLineIn(out) {
+    return function (v) {
+        return 1 - out(1 - v);
+    };
+}
+function createEase(outFunction) {
+    let inFunction = createLineIn(outFunction);
+    return {
+        easeOut: outFunction,
+        easeIn: inFunction,
+        easeInOut: createLineInOut(inFunction, outFunction),
+        easeOutIn: createLineInOut(outFunction, inFunction)
+    };
+}
 
-    /**
-	 * @property 类型方法
-	 */
-    var obj_copy = function (obj) {
-        if (arguments.length > 1) {
-            for (var i = 1; i < arguments.length; ++i) {
-                for (var k in arguments[i]) obj[k] = arguments[i][k];
-            }
-        }
-        return obj;
+//各种取值方式
+function property_set(obj, key) {
+    return function (val) {
+        if (arguments.length) obj[key] = val;
+        else return obj[key];
     };
-    var obj_copy_or = function (a, b, c) {
-        for (var i = 0; i < b.length; ++i) {
-            var oi = a[b[i] + c];
-            if (oi) return oi;
-        }
-    };
+}
 
-    var t = function (space) {
-        if (!this || !(this instanceof t)) return new t(space);
-        this._space = space || t.defaultSpace;
-        this._duration = 0;
-        this._list = {};
+function method_set(obj, key) {
+    return function (val) {
+        if (!arguments.length) return obj[key]();
+        obj[key](val);
     };
+}
+
+function setter_set(obj, key) {
+    let subKey = key.substr(3);
+    let set_key = "set" + subKey;
+    let get_key = "get" + subKey;
+    return function (val) {
+        if (arguments.length) obj[set_key](val);
+        else return obj[get_key]();
+    };
+}
+function requireTimeout(callback) {
+    return setTimeout(callback, 16);
+}
 
 
-    //拼合两个函数
-    var createLineInOut = function (inf, out) {
-        return function (v) {
-            if (v < 0.5) return inf(v * 2) / 2;
-            return out((v - 0.5) * 2) / 2 + 0.5;
-        };
-    };
-    //反向函数
-    var createLineIn = function (out) {
-        return function (v) {
-            return 1 - out(1 - v);
-        };
-    };
-    //创建规则函数群
-    t.createEase = function (name, outFunction) {
-        var inFunction = createLineIn(outFunction);
-        t[name] = {
-            easeOut: outFunction,
-            easeIn: inFunction,
-            easeInOut: createLineInOut(inFunction, outFunction),
-            easeOutIn: createLineInOut(outFunction, inFunction)
-        };
-    };
-    //加速弹跳函数
-    t.createEase("bounce", function (v) {
-        var zoom = 0.2;
-        var t1 = 1;
-        var t2 = Math.sqrt(zoom) * 2;
-        var t3 = zoom * 2;
-        var tall = t1 + t2 + t3;
-        t1 /= tall;
-        t2 /= tall;
-        t3 /= tall;
-        if (v <= t1) {
-            return Math.pow(v / t1, 2);
-        }
-        else if (v <= t1 + t2) {
-            return 1 - zoom + Math.pow((v - t1 - t2 / 2) / (t2 / 2), 2) * zoom;
-        }
-        else {
-            return 1 - zoom * zoom + Math.pow((v - t1 - t2 - t3 / 2) / (t3 / 2), 2) * zoom * zoom;
-        }
-    });
-    //减速函数 
-    t.createEase("linear", function (v) { return Math.sin(Math.PI * v / 2); });
-    //加速冲出回弹
-    t.createEase("back", function (v) {
-        var out = 0.06, tout = 0.3;
-        //g1 = 2;
-        var t1 = 1;
-        //g2 * t2 * t2 = 2 * out;
-        //g2 * t2 = g1 * t1;
-        //-> t2 = out;
-        //因为是减速回弹，过程有两个
-        var t2 = tout;
-        var t3 = t2 * Math.sqrt(2);
-        var tall = t1 + t2 + t3;
-        t1 /= tall;
-        t2 /= tall;
-        t3 /= tall;
-        if (v <= t1) {
-            return Math.pow(v / t1, 2);
-        }
-        else if (v <= t1 + t2 + t3 / 2) {
-            return 1 + out - Math.pow((v - t1 - t2) / t2, 2) * out;
-        }
-        else {
-            return 1 + Math.pow((v - 1) / t2, 2) * out;
-        }
-    });
-    //平方函数
-    t.createEase("square", function (v) {
-        var ev = 1 - v;
-        return 1 - ev * ev;
-    });
-    //立方函数
-    t.createEase("cube", function (v) {
-        var ev = 1 - v;
-        return 1 - ev * ev * ev;
-    });
-    //4次方函数
-    t.createEase("quad", function (v) {
-        var ev = 1 - v;
-        return 1 - ev * ev * ev * ev;
-    });
-    //匀速函数
-    t.linear.easeNone = function (v) { return v; };
 
-    //各种取值方式
-    var property_set = function (obj, key) {
-        return function (val) {
-            if (arguments.length) obj[key] = val;
-            else return obj[key];
-        };
-    };
+let obj_id = 0;
 
-    var method_set = function (obj, key) {
-        return function (val) {
-            if (!arguments.length) return obj[key]();
-            obj[key](val);
-        };
-    };
-
-    var setter_set = function (obj, key) {
-        var subKey = key.substr(3);
-        var set_key = "set" + subKey;
-        var get_key = "get" + subKey;
-        return function (val) {
-            if (arguments.length) obj[set_key](val);
-            else return obj[get_key]();
-        };
-    };
-
-    t._accessList = [function (obj, key) {
-        if (obj && (key in obj)) {
-            if (typeof obj[key] === "function") {
-                var isSet = key.substr(0, 3);
-                if (isSet == "get" || isSet == "set") return setter_set(obj, key);
-                return method_set(obj, key);
-            }
-            return property_set(obj, key);
-        }
-    }];
-
-    //获得读写器，可重写这个方法来改变行为
-    t.access = function (obj, key) {
-        for (var i = 0; i < t._accessList.length; ++i) {
-            var ret = t._accessList[i](obj, key);
-            if (ret) return ret;
-        }
-    };
-    //默认动效
-    t.defaultEase = t.linear.easeOut;
-
-    t._isArrayList = [function (obj) {
-        return obj instanceof Array;
-    }];
-    //数组判断， 如果要支持jQuery对象，请重写这个方法
-    t.isArray = function (obj) {
-        for (var i = 0; i < t._isArrayList.length; ++i) {
-            if (t._isArrayList[i](obj)) return true;
-        }
-        return false;
-    };
-
-
-    var obj_id = 0;
-
-    //时间线
-    t.prototype.add = function (obj) {
-        if (!obj || !obj.target || !obj.duration) {
-            throw new Error("target or duration is undefined");
-        }
-        if (!obj.from && !obj.to) throw new Error("from and to are undefined at all");
-
-        if (!obj.delay && obj.delay != 0) obj.delay = this._duration;
-        if (!obj.ease) obj.ease = t.defaultEase || t.linear.easeOut;
-        if (t.isArray(obj.target)) {
-            var de1 = this.duration();
-            for (var i = 0; i < obj.target.length; ++i) {
-                var obji = obj_copy({}, obj);
-                obji.target = obj.target[i];
-                this.add(obji);
-            }
-            return this;
-        }
-
-        if (!obj.target._jtimeline) obj.target._jtimeline = {
-            id: ++obj_id,
-            line: {}
-        };
-
-        this._duration = Math.max(this._duration, obj.duration + obj.delay);
-
-        var index = obj.target._jtimeline;
-
-        if (!this._list[index.id]) this._list[index.id] = {
-            target: obj.target,
-            list: []
-        };
-        obj._jtimeline = this._list[index.id].list.length;
-        this._list[index.id].list.push(obj);
-        return this;
-    };
-
-    //从到
-    t.prototype.fromTo = function (obj, duration, from, to, delay, ease_fun) {
-        if (delay instanceof Function) {
-            ease_fun = delay;
-            delay = undefined;
-        }
-        return this.add({
-            target: obj,
-            duration: duration,
-            from: from,
-            to: to,
-            delay: delay,
-            ease: ease_fun
-        });
-    };
-    //从
-    t.prototype.from = function (obj, duration, from, delay, ease_fun) {
-        return this.fromTo(obj, duration, from, undefined, delay, ease_fun);
-    };
-    //到
-    t.prototype.to = function (obj, duration, to, delay, ease_fun) {
-        return this.fromTo(obj, duration, undefined, to, delay, ease_fun);
-    };
-    //添加回调函数
-    t.prototype.callback = function (callback, delay) {
-        if (!callback) return this;
-        if (!delay && delay != 0) delay = this._duration;
-        else this._duration = Math.max(this._duration, delay);
-        if (!this._callbacks) this._callbacks = [];
-        this._callbacks.push({
-            callback: callback,
-            delay: delay
-        });
-        return this;
-    };
-    //添加其他的时间线，只会拷贝当前状态，当已添加的时间线被修改时，不会影响到当前时间线
-    t.prototype.addTimeline = function (line, delay, scale, reverse) {
-        if (!delay && delay != 0) delay = this._duration;
-        scale = scale || 1;
-        for (var i in line._list) {
-            var list = line._list[i].list;
-            for (var j = 0; j < list.length; ++j) {
-                var oi = list[j];
-                this.add({
-                    target: oi.target,
-                    duration: oi.duration * scale,
-                    from: reverse ? oi.to : oi.from,
-                    to: reverse ? oi.from : oi.to,
-                    delay: (reverse ? line._duration - oi.delay - oi.duration : oi.delay) * scale + delay,
-                    ease: reverse ? createLineIn(oi.ease) : oi.ease
-                });
-            }
-        }
-        if (line._callbacks) for (var i = 0; i < line._callbacks.length; ++i) {
-            var oi = line._callbacks[i];
-            this.callback(oi.callback, (reverse ? line._duration - oi.delay - oi.duration : oi.delay) * scale + delay);
-        }
-        return this;
-    };
-    //时间线长度
-    t.prototype.duration = function () {
-        return this._duration;
-    };
-    t.prototype.delay = function (t) {
-        this._duration += t;
-        return this;
-    };
-
-    var PropertyLine = function (obj, key, player) {
+function _valueAtUnit(oi, v) {
+    if (oi.unit) return v + oi.unit;
+    return v;
+}
+class PropertyLine {
+    constructor(obj, key, player) {
         this.list = [];
         this.target = obj;
         this.key = key;
-        this.valueSet = t.access(obj, key);
+        this.valueSet = jTimeline.access(obj, key);
         this.player = player;
         //this._cache = 0;
         //删除索引
-        var line = obj._jtimeline.line[key];
+        let line = obj._jtimeline.line[key];
         if (line) delete line._targets[obj._jtimeline.id].setter[key];
         obj._jtimeline.line[key] = player;
         /*
         if (line) {
-            for (var temp in line._targets) {
-                var ti = line._targets[temp].setter;
-                for (var j in ti) return;
+            for (let temp in line._targets) {
+                let ti = line._targets[temp].setter;
+                for (let j in ti) return;
             }
-            for (var temp in line._callbacks) return;
+            for (let temp in line._callbacks) return;
             line.kill();
         }
         */
-    };
-    PropertyLine.prototype.push = function (i) {
+    }
+    push(i) {
         //设置单位
         if (typeof i.from === "string") {
-            var unit = /([^\d]+)/ig.exec(i.from);
-            if (unit) t.unit = unit[1];
+            let unit = /([^\d]+)/ig.exec(i.from);
+            if (unit) jTimeline.unit = unit[1];
             i.from = parseFloat(i.from);
         }
         if (typeof i.to === "string") {
-            if (!t.unit) {
-                var unit = /([^\d]+)/ig.exec(i.to);
-                if (unit) t.unit = unit[1];
+            if (!jTimeline.unit) {
+                let unit = /([^\d]+)/ig.exec(i.to);
+                if (unit) jTimeline.unit = unit[1];
             }
             i.to = parseFloat(i.to);
         }
         if (this.list.length && this.list[this.list.length - 1].delay == i.delay) this.list.pop(); //除掉与自己重合的
         if (!this.list.length && i.delay > 0 && this.player.config.keepBeforeDelay) this._beforeDelay = this.valueSet(); //初始状态
         this.list.push(i);
-    };
-    PropertyLine.prototype.clear = function () {
-        var line = this.target._jtimeline.line[this.key];
+    }
+    clear() {
+        let line = this.target._jtimeline.line[this.key];
         if (line[this.key] == this.player) delete line[this.key];
         this.player = null;
-    };
-    var _valueAtUnit = function (oi, v) {
-        if (oi.unit) return v + oi.unit;
-        return v;
-    };
-    PropertyLine.prototype.valueAt = function (time) {
+    }
+    valueAt(time) {
         if (!this.a) {
             this.a = 1;
         }
-        for (var i = 0; i < this.list.length; ++i) {
-            var oi = this.list[i];
+        for (let i = 0; i < this.list.length; ++i) {
+            let oi = this.list[i];
             if ((oi.delay <= time && oi.duration + oi.delay >= time) || i + 1 >= this.list.length || this.list[i + 1].delay > time) {
-                var i = (time - oi.delay) / oi.duration;
+                let i = (time - oi.delay) / oi.duration;
                 if (i < 0) i = 0;
                 if (i > 1) i = 1;
                 return _valueAtUnit(oi, _excuter(oi.from, oi.to, oi.ease, i));
@@ -403,28 +120,32 @@ var jTimeline = (function () {
                 return _valueAtUnit(oi, this.player.config.keepBeforeDelay ? this._beforeDelay : oi.from);
             }
         }
-    };
+    }
+}
 
 
-    //执行器
-    var _excuter = function (from, to, ease_fun, i) {
-        return from + (to - from) * ease_fun(i);
-    };
+//执行器
+function _excuter(from, to, ease_fun, i) {
+    return from + (to - from) * ease_fun(i);
+};
 
 
-    //时间尺度的最小小数。单位为秒
-    var minValue = 0.0001;
+//时间尺度的最小小数。单位为秒
+let minValue = 0.0001;
 
-    var player_id = 0;
-    var Player = function (space, timeline, conf) {
-        this.config = obj_copy({
+let player_id = 0;
+class Player extends EventEmitter {
+    constructor(space, timeline, conf) {
+        super();
+        this.config = {
             repeat: 1, //重复次数
             delay: 0, //延迟播放，受scale影响
             scale: 1, //时间缩放
             wait: 0, //每次播放结束后的等待时间
             reverse: 0, //反向播放
-            keepBeforeDelay: t.keepBeforeDelay //在播放到指定的属性之前，保持当前状态
-        }, conf);
+            keepBeforeDelay: jTimeline.keepBeforeDelay, //在播放到指定的属性之前，保持当前状态
+            ...conf
+        };
 
         this._space = space;
 
@@ -433,7 +154,7 @@ var jTimeline = (function () {
 
         this._targets = {};
         //callbacks
-        var calls = timeline._callbacks;
+        let calls = timeline._callbacks;
         if (calls) {
             calls = calls.slice();
             calls.sort(function (a, b) {
@@ -443,22 +164,22 @@ var jTimeline = (function () {
         this._callbacks = calls;
 
         //fromTo
-        var ol = timeline._list;
-        for (var i in ol) {
-            var oi = ol[i];
-            var idx = oi.target._jtimeline;
-            var lst = oi.list.slice();
+        let ol = timeline._list;
+        for (let i in ol) {
+            let oi = ol[i];
+            let idx = oi.target._jtimeline;
+            let lst = oi.list.slice();
 
-            var minSort = minValue / lst.length;
+            let minSort = minValue / lst.length;
             lst.sort(function (a, b) {
                 return a.delay - b.delay + (a._jtimeline - b._jtimeline) * minSort; //按延时和顺序排序
             });
 
             //填充缺失的参数
-            var setter = {};
-            for (var j = 0; j < lst.length; ++j) {
-                var lj = lst[j];
-                if (lj.from) for (var k in lj.from) {
+            let setter = {};
+            for (let j = 0; j < lst.length; ++j) {
+                let lj = lst[j];
+                if (lj.from) for (let k in lj.from) {
                     if (!setter[k]) setter[k] = new PropertyLine(oi.target, k, this);
                     setter[k].push({
                         delay: lj.delay,
@@ -468,7 +189,7 @@ var jTimeline = (function () {
                         to: lj.to && (k in lj.to) ? lj.to[k] : setter[k].list.length ? setter[k].valueAt(lj.delay + lj.duration) : setter[k].valueSet()
                     })
                 }
-                if (lj.to) for (var k in lj.to) {
+                if (lj.to) for (let k in lj.to) {
                     if (lj.from && (k in lj.from)) continue;
                     if (!setter[k]) setter[k] = new PropertyLine(oi.target, k, this);
                     setter[k].push({
@@ -489,276 +210,475 @@ var jTimeline = (function () {
         this._process = 0;
         this._last_repeat = 0;
 
-        if (this._callbacks && this._callbacks.length) this._position = _getProcess.call(this);
-    };
-    appendEvent(Player.prototype);
-    Player.prototype.play = function () {
+        if (this._callbacks && this._callbacks.length) this._position = this._getProcess();
+    }
+
+    play() {
         if (this._killed) throw new Error("player is killed");
         if (1 == this._status) return;
         this._status = 1;
         this._space._addPlayer(this);
-        this.trigger("play");
-    };
-    Player.prototype.pause = function () {
+        this.emit("play");
+    }
+    pause() {
         if (2 == this._status) return;
         this._space._removePlayer(this);
         this._status = 2;
-        this.trigger("pause");
-    };
-    Player.prototype.kill = function () {
+        this.emit("pause");
+    }
+    kill() {
         if (-1 == this._status) return;
         this._space._removePlayer(this);
         this._status = -1;
-        for (var i in this._targets) {
-            var ti = this._targets[i].setter;
-            for (var j in ti) ti[j].clear();
+        for (let i in this._targets) {
+            let ti = this._targets[i].setter;
+            for (let j in ti) ti[j].clear();
         }
         this._killed = true;
-        this.trigger("kill");
-    };
-    var _onTick = function (dtime) {
+        this.emit("kill");
+    }
+    _onTick(dtime) {
         this._process += dtime * this.config.scale / 1000;
         //根据时间来算位置
-        var all_len = this.config.delay + this._duration + this.config.wait;
+        let all_len = this.config.delay + this._duration + this.config.wait;
 
-        var times = Math.floor(this._process / all_len);
+        let times = Math.floor(this._process / all_len);
+        if (isNaN(times)) times = 0;
 
         //最大重复次数
         if (this.config.repeat > 0 && times >= this.config.repeat) {
-            _setProgress.call(this, _getStaticProcess.call(this, this._duration));
+            this._setProgress(this._getStaticProcess(this._duration));
             this.kill();
             return;
         }
 
         //初始化
-        var times_changed = times != this._last_repeat;
+        let times_changed = times != this._last_repeat;
         if (times_changed) {
             this._last_repeat = times;
-            this.trigger("times", times);
+            this.emit("times", times);
         }
-        _setProgress.call(this, _getProcess.call(this), times_changed);
-    };
-    var _isReverse = function () {
-        var reverse = this.config.reverse;
+        this._setProgress(this._getProcess(), times_changed);
+    }
+    _isReverse() {
+        let reverse = this.config.reverse;
         if (reverse > 1) {
-            var all_len = this.config.delay + this._duration + this.config.wait;
-            var times = Math.floor(this._process / all_len);
+            let all_len = this.config.delay + this._duration + this.config.wait;
+            let times = Math.floor(this._process / all_len);
+            if (isNaN(times)) times = 0;
             if (this.config.repeat > 0 && times >= this.config.repeat) times = this.config.repeat - 1;
             reverse = (times - reverse) % 2;
         }
         return reverse;
-    };
-    var _getProcess = function () {
+    }
+    _getProcess() {
         //根据时间来算位置
-        var all_len = this.config.delay + this._duration + this.config.wait;
-        var this_time = this._process % all_len;
-        if (this_time == 0 && this._process / all_len > this._last_repeat) {
-            if (_isReverse.call(this)) return 0;
+        let all_len = this.config.delay + this._duration + this.config.wait;
+        let this_time = this._process % all_len;
+        if (isNaN(this_time)) this_time = this._process;
+        let times = Math.floor(this._process / all_len);
+        if (isNaN(times)) times = 0;
+        if (this_time == 0 && times > this._last_repeat) {
+            if (this._isReverse()) return 0;
             else return this._duration;
-        } else if (_isReverse.call(this)) {
+        } else if (this._isReverse()) {
             return Math.max(0, Math.min(this._duration, all_len - this_time - this.config.delay));
         }
         return Math.max(0, Math.min(this._duration, this_time - this.config.delay));
-    };
-    var _getStaticProcess = function (time) {
-        if (_isReverse.call(this)) return this._duration - time;
+    }
+    _getStaticProcess(time) {
+        if (this._isReverse()) return this._duration - time;
         return time;
-    };
-    var _setProgress = function (time, times_changed, ignore_callbacks) {
-        for (var i in this._targets) {
-            var ti = this._targets[i].setter;
-            for (var j in ti) ti[j].valueSet(ti[j].valueAt(time));
+    }
+    _setProgress(time, times_changed, ignore_callbacks) {
+        for (let i in this._targets) {
+            let ti = this._targets[i].setter;
+            for (let j in ti) ti[j].valueSet(ti[j].valueAt(time));
         }
 
         if (this._callbacks && this._callbacks.length) {
             if (!ignore_callbacks) {
                 if (times_changed) { //越过了边界
-                    var limit1 = this._duration, limit2 = 0;
+                    let limit1 = this._duration, limit2 = 0;
                     if (this.config.reverse == 1) {
                         limit1 = 0;
                         limit2 = this._duration;
                     } else if (this.config.reverse > 1) {
-                        limit1 = limit2 = _isReverse.call(this) ? this._duration : 0;
+                        limit1 = limit2 = this._isReverse() ? this._duration : 0;
                     }
-                    _setCallbackProcess.call(this, this._position, limit1);
-                    _setCallbackProcess.call(this, limit2, time);
+                    this._setCallbackProcess(this._position, limit1);
+                    this._setCallbackProcess(limit2, time);
                 } else {
-                    _setCallbackProcess.call(this, this._position, time);
+                    this._setCallbackProcess(this._position, time);
                 }
             }
             this._position = time;
         }
-        this.trigger("progress");
-    };
-    var _setCallbackProcess = function (pre, time) {
-        var a = Math.min(pre, time);
-        var b = Math.max(pre, time);
+        this.emit("progress");
+    }
+    _setCallbackProcess(pre, time) {
+        let a = Math.min(pre, time);
+        let b = Math.max(pre, time);
 
-        for (var i = 0; i < this._callbacks.length; ++i) {
-            var ci = this._callbacks[i];
+        for (let i = 0; i < this._callbacks.length; ++i) {
+            let ci = this._callbacks[i];
             if ((ci.delay > a && ci.delay <= b) || (ci.delay == 0 && a == 0)) ci.callback && ci.callback.call(this, time);
         }
-    };
-    Player.prototype.reset = function () {
+    }
+    reset() {
         if (!this._status) return;
         this._space._removePlayer(this);
         this._status = 0;
         this._process = 0;
         this._last_repeat = 0;
-        _setProgress.call(this, _getStaticProcess.call(this, 0), false, true); //reset时不需要调用回调函数
-        this.trigger("reset");
-    };
-    Player.prototype.progress = function (v) {
-        var all_len = this.config.delay + this._duration + this.config.wait;
+        this._setProgress(this._getStaticProcess(0), false, true); //reset时不需要调用回调函数
+        this.emit("reset");
+    }
+    progress(v) {
+        let all_len = this.config.delay + this._duration + this.config.wait;
         if (!arguments.length) {
-            var val = (this._process % all_len) / all_len;
+            let val = (this._process % all_len) / all_len;
             if (val == 0 && this._process / all_len > this._last_repeat) return 1;
             return val;
         }
         this._process = this._last_repeat * all_len + Math.max(0, Math.min(1, v)) * all_len;
 
-        _setProgress.call(this, _getProcess.call(this));
-    };
+        this._setProgress(this._getProcess());
+    }
+}
 
-    var requireTimeout = function (callback) { return setTimeout(callback, 16); };
+class PlaySpace extends EventEmitter {
+    constructor(fps) {
+        super();
+        this.fps(fps);
+    }
+    _dps = 0;
+    _fps = 0;
+    fps(v) {
+        if (!arguments.length) return this._fps;
+        this._fps = v;
+        this._dps = this._fps ? 1000 / this._fps : 0;
+    }
+    _killTimer;
+    _paused = 0;
+    _next_ticks;
+    _timeScale = 1;
+    _player_list = {};
+    _exeNextTicks() {
+        if (this._next_ticks) {
+            let temp = this._next_ticks;
+            this._next_ticks = null;
+            for (let k in temp) {
+                temp[k]();
+            }
+        }
+    }
+    _startTimer() {
+        if (this._killTimer) return;
+        let aframe = jTimeline.requestAnimationFrame();
+        let cframe = jTimeline.clearAnimationFrame();
+
+        let _last_time = new Date().getTime();
+
+        let ticker = () => {
+            if (!this._killTimer) return;
+            let now = new Date().getTime();
+            let dtime = now - _last_time;
+            if (this._dps <= dtime) {
+                dtime *= this._timeScale;
+                _last_time = now;
+                for (let i in this._player_list) this._player_list[i]._onTick(dtime);
+                this.emit("tick", dtime);
+                this._exeNextTicks();
+            }
+            timer = aframe(ticker);
+        };
+        this._killTimer = () => {
+            if (timer) cframe(timer);
+            this._killTimer = undefined;
+            this._exeNextTicks();
+        };
+        let timer = aframe(ticker); //启动定时器
+    }
+    _addPlayer(player) {
+        this._player_list[player._player_id] = player;
+        if (!this._paused) this._startTimer();
+    }
+
+    //时间缩放
+    timeScale(v) {
+        if (!arguments.length) return this._timeScale;
+        this._timeScale = v;
+    }
+
+    _removePlayer(player) {
+        delete this._player_list[player._player_id];
+        for (let i in this._player_list) return;
+        this._killTimer && this._killTimer();
+    }
+
+    pause() {
+        if (this._paused) return;
+        this._paused = 1;
+        this._killTimer && this._killTimer();
+    }
+
+    resume() {
+        if (!this._paused) return;
+        this._paused = 0;
+        for (let i in this._player_list) {
+            this._startTimer();
+            return;
+        }
+    }
+
+    //下一帧调用
+    _next_ticks_id = 0;
+    nextTick(callback, key) {
+        if (!callback) return;
+        if (!this._killTimer) {
+            callback();
+            return;
+        }
+        if (!this._next_ticks) this._next_ticks = {};
+        if (!key) key = ++this._next_ticks_id;
+        else {
+            key = "str_" + key;
+            this.clearNextTick(key);
+        }
+        this._next_ticks[key] = callback;
+        return key;
+    }
+
+    //清除下一帧
+    clearNextTick(id) {
+        if (!this._next_ticks || !id) return;
+        if (this._next_ticks[id]) delete this._next_ticks[id];
+    }
+
+    isPaused() {
+        return this._paused;
+    }
+}
+
+
+export default class jTimeline {
+    constructor(space) {
+        if (!this || !(this instanceof jTimeline)) return new new jTimeline(space);
+        this._space = space || jTimeline.defaultSpace;
+        this._duration = 0;
+        this._list = {};
+    }
+
+    static createEase = createEase;
+    static bounce = createEase(v => {
+        let zoom = 0.2;
+        let t1 = 1;
+        let t2 = Math.sqrt(zoom) * 2;
+        let t3 = zoom * 2;
+        let tall = t1 + t2 + t3;
+        t1 /= tall;
+        t2 /= tall;
+        t3 /= tall;
+        if (v <= t1) {
+            return Math.pow(v / t1, 2);
+        }
+        else if (v <= t1 + t2) {
+            return 1 - zoom + Math.pow((v - t1 - t2 / 2) / (t2 / 2), 2) * zoom;
+        }
+        else {
+            return 1 - zoom * zoom + Math.pow((v - t1 - t2 - t3 / 2) / (t3 / 2), 2) * zoom * zoom;
+        }
+    });
+    static linear = createEase(v => Math.sin(Math.PI * v / 2));
+    static back = createEase(function (v) {
+        let out = 0.06, tout = 0.3;
+        //g1 = 2;
+        let t1 = 1;
+        //g2 * t2 * t2 = 2 * out;
+        //g2 * t2 = g1 * t1;
+        //-> t2 = out;
+        //因为是减速回弹，过程有两个
+        let t2 = tout;
+        let t3 = t2 * Math.sqrt(2);
+        let tall = t1 + t2 + t3;
+        t1 /= tall;
+        t2 /= tall;
+        t3 /= tall;
+        if (v <= t1) {
+            return Math.pow(v / t1, 2);
+        }
+        else if (v <= t1 + t2 + t3 / 2) {
+            return 1 + out - Math.pow((v - t1 - t2) / t2, 2) * out;
+        }
+        else {
+            return 1 + Math.pow((v - 1) / t2, 2) * out;
+        }
+    });
+
+    //平方函数
+    static square = createEase(v => {
+        let ev = 1 - v;
+        return 1 - ev * ev;
+    });
+    //立方函数
+    static cube = createEase(v => {
+        let ev = 1 - v;
+        return 1 - ev * ev * ev;
+    });
+    //4次方函数
+    static quad = createEase(v => {
+        let ev = 1 - v;
+        return 1 - ev * ev * ev * ev;
+    });
+
+    static _accessList = [(obj, key) => {
+        if (obj && (key in obj)) {
+            if (typeof obj[key] === "function") {
+                let isSet = key.substr(0, 3);
+                if (isSet == "get" || isSet == "set") return setter_set(obj, key);
+                return method_set(obj, key);
+            }
+            return property_set(obj, key);
+        }
+    }];
+    //获得读写器，可重写这个方法来改变行为
+    static access(obj, key) {
+        for (let i = 0; i < jTimeline._accessList.length; ++i) {
+            let ret = jTimeline._accessList[i](obj, key);
+            if (ret) return ret;
+        }
+    }
+    static _isArrayList = [obj => obj instanceof Array];
+    //数组判断， 如果要支持jQuery对象，请重写这个方法
+    static isArray(obj) {
+        for (let i = 0; i < jTimeline._isArrayList.length; ++i) {
+            if (jTimeline._isArrayList[i](obj)) return true;
+        }
+        return false;
+    }
+
     //定时器实现。支持所有实现了setTimeout的平台
-    t.requestAnimationFrame = function () {
+    static requestAnimationFrame() {
         try {
-            return obj_copy_or(window, 'r,webkitR,msR,mozR'.split(','), 'equestAnimationFrame') || requireTimeout;
+            return requestAnimationFrame || webkitRequestAnimationFrame || mozRequestAnimationFrame || msRequestAnimationFrame || requireTimeout;
         } catch (e) {
             return requireTimeout;
         }
-    };
+    }
     //清除定时器
-    t.clearAnimationFrame = function () {
+    static clearAnimationFrame() {
         try {
-            return obj_copy_or(window, 'c,webkitC,msC,mozC'.split(','), 'ancelAnimationFrame') || clearTimeout;
+            return cancelAnimationFrame || webkitCancelAnimationFrame || mozCancelAnimationFrame || msCancelAnimationFrame || clearTimeout;
         } catch (e) {
             return clearTimeout;
         }
-    };
+    }
 
-    appendEvent(t);
+    //时间线
+    add(obj) {
+        if (!obj || !obj.target || !obj.duration) {
+            throw new Error("target or duration is undefined");
+        }
+        if (!obj.from && !obj.to) throw new Error("from and to are undefined at all");
 
-
-    t.playSpace = function (fps) {
-        var space = {};
-        appendEvent(space);
-
-        var dps = 0, _fps = 0;
-        space.fps = function (v) {
-            if (!arguments.length) return _fps;
-            _fps = v;
-            dps = _fps ? 1000 / _fps : 0;
-        };
-        space.fps(fps);
-
-        var _killTimer, paused = 0, _next_ticks, _timeScale = 1;
-        var _exeNextTicks = function () {
-            if (_next_ticks) {
-                var temp = _next_ticks;
-                _next_ticks = null;
-                for (var k in temp) {
-                    temp[k]();
-                }
+        if (!obj.delay && obj.delay != 0) obj.delay = this._duration;
+        if (!obj.ease) obj.ease = jTimeline.defaultEase || jTimeline.linear.easeOut;
+        if (jTimeline.isArray(obj.target)) {
+            let de1 = this.duration();
+            for (let i = 0; i < obj.target.length; ++i) {
+                let obji = { ...obj };
+                obji.target = obj.target[i];
+                this.add(obji);
             }
-        };
-        var _startTimer = function () {
-            if (_killTimer) return;
-            var aframe = t.requestAnimationFrame();
-            var cframe = t.clearAnimationFrame();
+            return this;
+        }
 
-            var _last_time = new Date().getTime();
-
-            var ticker = function () {
-                if (!_killTimer) return;
-                var now = new Date().getTime();
-                var dtime = now - _last_time;
-                if (dps <= dtime) {
-                    dtime *= _timeScale;
-                    _last_time = now;
-                    for (var i in player_list) _onTick.call(player_list[i], dtime);
-                    space.trigger("tick", dtime);
-                    _exeNextTicks();
-                }
-                timer = aframe(ticker);
-            };
-            _killTimer = function () {
-                if (timer) cframe(timer);
-                _killTimer = undefined;
-                _exeNextTicks();
-            };
-            var timer = aframe(ticker); //启动定时器
+        if (!obj.target._jtimeline) obj.target._jtimeline = {
+            id: ++obj_id,
+            line: {}
         };
 
-        var player_list = {};
-        space._addPlayer = function (player) {
-            player_list[player._player_id] = player;
-            if (!paused) _startTimer();
-        };
+        this._duration = Math.max(this._duration, obj.duration + obj.delay);
 
-        //时间缩放
-        space.timeScale = function (v) {
-            if (!arguments.length) return _timeScale;
-            _timeScale = v;
-        };
+        let index = obj.target._jtimeline;
 
-        space._removePlayer = function (player) {
-            delete player_list[player._player_id];
-            for (var i in player_list) return;
-            _killTimer && _killTimer();
+        if (!this._list[index.id]) this._list[index.id] = {
+            target: obj.target,
+            list: []
         };
+        obj._jtimeline = this._list[index.id].list.length;
+        this._list[index.id].list.push(obj);
+        return this;
+    }
 
-        space.pause = function () {
-            if (paused) return;
-            paused = 1;
-            _killTimer && _killTimer();
-        };
-
-        space.resume = function () {
-            if (!paused) return;
-            paused = 0;
-            for (var i in player_list) {
-                _startTimer();
-                return;
+    //从到
+    fromTo(obj, duration, from, to, delay, ease_fun) {
+        if (delay instanceof Function) {
+            ease_fun = delay;
+            delay = undefined;
+        }
+        return this.add({
+            target: obj,
+            duration: duration,
+            from: from,
+            to: to,
+            delay: delay,
+            ease: ease_fun
+        });
+    }
+    //从
+    from(obj, duration, from, delay, ease_fun) {
+        return this.fromTo(obj, duration, from, undefined, delay, ease_fun);
+    }
+    //到
+    to(obj, duration, to, delay, ease_fun) {
+        return this.fromTo(obj, duration, undefined, to, delay, ease_fun);
+    }
+    //添加回调函数
+    callback(callback, delay) {
+        if (!callback) return this;
+        if (!delay && delay != 0) delay = this._duration;
+        else this._duration = Math.max(this._duration, delay);
+        if (!this._callbacks) this._callbacks = [];
+        this._callbacks.push({
+            callback: callback,
+            delay: delay
+        });
+        return this;
+    }
+    //添加其他的时间线，只会拷贝当前状态，当已添加的时间线被修改时，不会影响到当前时间线
+    addTimeline(line, delay, scale, reverse) {
+        if (!delay && delay != 0) delay = this._duration;
+        scale = scale || 1;
+        for (let i in line._list) {
+            let list = line._list[i].list;
+            for (let j = 0; j < list.length; ++j) {
+                let oi = list[j];
+                this.add({
+                    target: oi.target,
+                    duration: oi.duration * scale,
+                    from: reverse ? oi.to : oi.from,
+                    to: reverse ? oi.from : oi.to,
+                    delay: (reverse ? line._duration - oi.delay - oi.duration : oi.delay) * scale + delay,
+                    ease: reverse ? createLineIn(oi.ease) : oi.ease
+                });
             }
-        };
-
-        //下一帧调用
-        var _next_ticks_id = 0;
-        space.nextTick = function (callback, key) {
-            if (!callback) return;
-            if (!_killTimer) {
-                callback();
-                return;
-            }
-            if (!_next_ticks) _next_ticks = {};
-            if (!key) key = ++_next_ticks_id;
-            else {
-                key = "str_" + key;
-                this.clearNextTick(key);
-            }
-            _next_ticks[key] = callback;
-            return key;
-        };
-
-        //清除下一帧
-        space.clearNextTick = function (id) {
-            if (!_next_ticks || !id) return;
-            if (_next_ticks[id]) delete _next_ticks[id];
-        };
-
-        space.isPaused = function () {
-            return paused;
-        };
-
-        space._trace = function () {
-            return player_list;
-        };
-
-        return space;
-    };
-
+        }
+        if (line._callbacks) for (let i = 0; i < line._callbacks.length; ++i) {
+            let oi = line._callbacks[i];
+            this.callback(oi.callback, (reverse ? line._duration - oi.delay - oi.duration : oi.delay) * scale + delay);
+        }
+        return this;
+    }
+    //时间线长度
+    duration() {
+        return this._duration;
+    }
+    delay(t) {
+        this._duration += t;
+        return this;
+    }
 
     /** 播放，将产生一个播放对象，而不修改源对象
      * repeat: 1, //重复次数
@@ -766,33 +686,48 @@ var jTimeline = (function () {
      * scale: 1, //时间缩放
      * wait: 0, //每次播放结束后的等待时间
      * reverse: 0, //反向播放
-     * keepBeforeDelay: t.keepBeforeDelay //在播放到指定的属性之前，保持当前状态
+     * keepBeforeDelay: jTimeline.keepBeforeDelay //在播放到指定的属性之前，保持当前状态
      * space: undefined //计时器
     */
-    t.prototype.play = function (config) {
-        var player = new Player((config && config.space) || this._space, this, config);
+    play(config) {
+        let player = new Player((config && config.space) || this._space, this, config);
         player.progress(0);
         if (!player.config.paused) player.play();
         return player;
-    };
+    }
+
 
     //使用的快捷方式
-    t.fromTo = function (tar, duration, from, to, delay, ease_fun) {
-        return t().fromTo(tar, duration, from, to, delay, ease_fun).play();
-    };
-    t.from = function (tar, duration, from, delay, ease_fun) {
-        return t().from(tar, duration, from, delay, ease_fun).play();
-    };
-    t.to = function (tar, duration, to, delay, ease_fun) {
-        return t().to(tar, duration, to, delay, ease_fun).play();
-    };
-
-    t.timeout = function (callback, delay) {
-        return t().callback(callback, delay).play();
-    };
+    static fromTo(tar, duration, from, to, delay, ease_fun) {
+        return new jTimeline().fromTo(tar, duration, from, to, delay, ease_fun).play();
+    }
+    static from(tar, duration, from, delay, ease_fun) {
+        return new jTimeline().from(tar, duration, from, delay, ease_fun).play();
+    }
+    static to(tar, duration, to, delay, ease_fun) {
+        return new jTimeline().to(tar, duration, to, delay, ease_fun).play();
+    }
+    static timeout(callback, delay) {
+        return new jTimeline().callback(callback, delay).play();
+    }
+    static temp(progress, from) {
+        let val = from || 0;
+        return {
+            val: function (v) {
+                if (!arguments.length) return val;
+                progress(v);
+                val = v;
+            }
+        };
+    }
+    static playSpace(fps) { return new PlaySpace(fps); }
 
     //默认play
-    t.defaultSpace = t.playSpace();
+    static defaultSpace = new PlaySpace();
+}
 
-    return t;
-})();
+//匀速函数
+jTimeline.linear.easeNone = v => v;
+
+//默认动效
+jTimeline.defaultEase = jTimeline.linear.easeOut;

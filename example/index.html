@@ -4,42 +4,13 @@
     <title>Timeline</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,user-scalable=no,minimum-scale=1,maximum-scale=1" />
-    <script src="//code.jquery.com/jquery-1.11.3.min.js"></script>
-    <script src="../src/jTimeline.js"></script>
-    <script src="../src/jTimelineStylesheet.js"></script>
     <style type="text/css">
         html { overflow: auto; }
         body { margin: 5px; }
     </style>
 </head>
 <body>
-    <div id="i1" style="width: 100px;height:100px;background:red;position:absolute;left:20px;top:50px;"></div>
-    <script>
-        var player = jTimeline()
-            .to($("#i1"), 2, { top: 500, left: 300 }, jTimeline.ease.bounce.easeOut)
-            .addTimeline(jTimeline().fromTo($("#i1"), 2, { width: 200 }, { width: 100 }).callback(function () { console.log("test"); }), 1, 0.5, 1)
-            .to($("#i1"), 2, { width: 300, height: 400 })
-            .callback(function () {
-                console.log("end");
-            })
-            .play({
-                reverse: 3,
-                repeat: 0,
-                wait: 1,
-                scale: 2
-            });
-
-        player.on("times", function (t) {
-            console.log(t);
-        });
-
-        setTimeout(function () {
-            //jTimeline.to($("#i1"), 2, { left: 500 });
-        }, 3000);
-
-        setTimeout(function () {
-            //player.pause();
-        }, 12000);
-    </script>
+    <img id="i1" width="100" height="100" style="background:red;position:absolute;left:20px;top:50px;" />
+    <script src="bundle.js"></script>
 </body>
 </html>

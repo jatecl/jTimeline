@@ -1,8 +1,11 @@
 # jTimeline
-一个简单的动画驱动
+一个简单的动画驱动。
+```
+npm install https://github.com/jatecl/jTimeline.git --save
+```
 
-## jTimeline()
-返回一个时间线编辑对象，主要包含如下方法: 
+## jTimeline
+一个时间线编辑对象，主要包含如下方法: 
 
 fromTo: 从一个状态动画到另一个状态
 
@@ -103,9 +106,11 @@ Player有如下事件可以使用
 
 
 ```javascript
-var $div = $("#div");
-var player = jTimeline().from($div, 0.5, { left: 30 })
-	.to($div, 0.5, { top: 50 })
+var jTimeline = require("jTimeline");
+
+var $div = document.getElementById("image");
+var player = new jTimeline().from($div, 0.5, { width: 30 })
+	.to($div, 0.5, { height: 50 })
 	.callback(function(){
 		alert("end");
 	})
@@ -118,11 +123,11 @@ player.process(0.5);
 
 ## 其他方法和属性
 
-jTimeline.from: 将调用jTimeline().from并play
+jTimeline.from: 将调用new jTimeline().from并play
 
-jTimeline.to: 将调用jTimeline().to并play
+jTimeline.to: 将调用new jTimeline().to并play
 
-jTimeline.fromTo: 将调用jTimeline().fromTo并play
+jTimeline.fromTo: 将调用new jTimeline().fromTo并play
 
 jTimeline.ease: 预置的缓动效果
 
@@ -132,8 +137,11 @@ jTimeline.requestAnimationFrame: 多媒体定时器。重写这个函数，可�
 
 jTimeline.clearAnimationFrame: 清除多媒体定时器。应该和requestAnimationFrame同时被重写
 
-jTimeline.access: 重写这个函数，可以支持更多的对象。示例见src/jTimelineCss.js
+jTimeline.access: 重写这个函数，可以支持更多的对象。示例见jTimelineCss
 
-jTimeline.isArray: 重写这个函数，可以对自定义的列表对象做处理。示例见src/jTimelineCss.js
+jTimeline.isArray: 重写这个函数，可以对自定义的列表对象做处理。示例见jTimelineCss
 
 jTimeline.playSpace: 对动画进行分组，可以实现暂停、播放等动作
+
+## 为什么不支持style
+为了最大的兼容性，jTimeline只实现了基础的赋值方法。如果需要对style的支持，请移步jTimelineCss。

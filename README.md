@@ -106,7 +106,7 @@ Player有如下事件可以使用
 
 
 ```javascript
-var jTimeline = require("jTimeline");
+var jTimeline = require("jtimeline");
 
 var $div = document.getElementById("image");
 var player = new jTimeline().from($div, 0.5, { width: 30 })
@@ -137,11 +137,11 @@ jTimeline.requestAnimationFrame: 多媒体定时器。重写这个函数，可�
 
 jTimeline.clearAnimationFrame: 清除多媒体定时器。应该和requestAnimationFrame同时被重写
 
-jTimeline.access: 重写这个函数，可以支持更多的对象。示例见jTimelineCss
+jTimeline.access: 重写这个函数，可以支持更多的对象。
 
-jTimeline.isArray: 重写这个函数，可以对自定义的列表对象做处理。示例见jTimelineCss
+jTimeline.isArray: 重写这个函数，可以对自定义的列表对象做处理。
 
 jTimeline.playSpace: 对动画进行分组，可以实现暂停、播放等动作
 
 ## 为什么不支持style
-为了最大的兼容性，jTimeline只实现了基础的赋值方法。如果需要对style的支持，请移步jTimelineCss。
+为了最大的兼容性，jTimeline只实现了基础的赋值方法。如果需要对style的支持，请移步[jTimelineCss](https://github.com/jatecl/jTimelineCss)。
